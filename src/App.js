@@ -1,19 +1,23 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-import CommentsPage from './pages/CommentsPage';
 import LoginPage from './pages/LoginPage';
-import Navbar from './components/Navbar';
+import CommentPage from './pages/CommentPage';
+import { isAuthenticated } from './utils/auth';
 import './App.css';
 
 const App = () => {
   return (
     <Router>
-      <Navbar />
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/comments" element={<CommentsPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/comments/:id"
+          element={
+            isAuthenticated() ? <CommentPage /> : <Navigate to="/login" replace />
+          }
+        />
       </Routes>
     </Router>
   );
