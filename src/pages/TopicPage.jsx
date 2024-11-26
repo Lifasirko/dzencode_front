@@ -1,14 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import api from '../utils/api';
-import placeholderAvatar from '../assets/placeholder-avatar.png'; // Заглушка для аватарки
+import placeholderAvatar from '../assets/placeholder-avatar.png';
+
+// Функція для екранування HTML
+const escapeHTML = (html) => {
+  return html
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
+// Функція для очищення HTML
+const sanitizeHTML = (html) => {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['a', 'code', 'i', 'strong'],
+    ALLOWED_ATTR: ['href', 'title'],
+  });
+};
 
 const TopicPage = () => {
   const { topicId } = useParams();
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [replyTo, setReplyTo] = useState(null); // Відстежуємо коментар, для якого показуємо форму відповіді
-  const [replyText, setReplyText] = useState(''); // Текст відповіді
+  const [replyTo, setReplyTo] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const textareaRef = useRef(null);
 
   useEffect(() => {
     const fetchComments = async () => {
@@ -33,15 +53,14 @@ const TopicPage = () => {
     try {
       const response = await api.post('/api/comments/', {
         text: replyText,
-        parent: replyTo, // Ідентифікатор коментаря, до якого додаємо відповідь
-        user_name: 'Анонім', // Замініть на реальне ім'я
-        email: 'your_email@example.com', // Замініть на реальний email
-        home_page: '', // Можете додати логіку для заповнення цього поля
+        parent: replyTo,
+        user_name: localStorage.getItem('user_name') || 'Анонім',
+        email: 'your_email@example.com',
+        home_page: '',
       });
       console.log('Відповідь успішно додана:', response.data);
-      setReplyText(''); // Очищаємо текст відповіді
-      setReplyTo(null); // Скидаємо стан після успішного додавання
-      // Оновлення списку коментарів
+      setReplyText('');
+      setReplyTo(null);
       const updatedResponse = await api.get(`/api/comments/${topicId}/`);
       setComments(updatedResponse.data.children || []);
     } catch (error) {
@@ -50,14 +69,39 @@ const TopicPage = () => {
     }
   };
 
+  const addTagToText = (tag) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const { selectionStart, selectionEnd, value } = textarea;
+    const selectedText = value.slice(selectionStart, selectionEnd);
+    const before = value.slice(0, selectionStart);
+    const after = value.slice(selectionEnd);
+
+    let wrappedText = '';
+    if (tag === 'a') {
+      wrappedText = `<a href="" title="">${selectedText || 'посилання'}</a>`;
+    } else if (tag === 'code') {
+      wrappedText = `<code>${escapeHTML(selectedText || 'код')}</code>`;
+    } else {
+      wrappedText = `<${tag}>${selectedText}</${tag}>`;
+    }
+
+    const newText = `${before}${wrappedText}${after}`;
+    setReplyText(newText);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(before.length + wrappedText.length, before.length + wrappedText.length);
+    }, 0);
+  };
+
   const renderComments = (commentsList) => {
     return (
       <ul className="pl-4">
         {commentsList.map((comment) => (
           <li key={comment.id} className="mb-4 border-b pb-4">
-            {/* Верхня частина коментаря */}
             <div className="flex items-center mb-2">
-              {/* Аватарка */}
               <img
                 src={comment.avatar || placeholderAvatar}
                 alt="Аватар коментатора"
@@ -68,43 +112,58 @@ const TopicPage = () => {
                   marginRight: '1rem',
                 }}
               />
-              {/* Інформація про коментар */}
               <div className="flex-1">
-                <h4 className="text-lg font-bold">{comment.user_name}</h4>
+                <h4 className="text-lg font-bold">{sanitizeHTML(comment.user_name)}</h4>
                 <p className="text-sm text-gray-500">
                   {new Date(comment.date_added).toLocaleString()}
                 </p>
               </div>
-              {/* Рейтинг */}
-              <div className="flex items-center">
-                <button
-                  className="text-green-500 hover:text-green-700"
-                  onClick={() => console.log('Upvote', comment.id)}
-                >
-                  ▲
-                </button>
-                <span className="mx-2">{comment.rating || 0}</span>
-                <button
-                  className="text-red-500 hover:text-red-700"
-                  onClick={() => console.log('Downvote', comment.id)}
-                >
-                  ▼
-                </button>
-              </div>
             </div>
-            {/* Текст коментаря */}
-            <p>{comment.text}</p>
-            {/* Кнопка відповіді */}
+            <p
+              dangerouslySetInnerHTML={{
+                __html: sanitizeHTML(comment.text).replace(
+                  /<code>(.*?)<\/code>/g,
+                  (_, code) => `<code>${escapeHTML(code)}</code>`
+                ),
+              }}
+            ></p>
             <button
               onClick={() => setReplyTo(replyTo === comment.id ? null : comment.id)}
               className="text-blue-500 underline mt-2"
             >
               {replyTo === comment.id ? 'Скасувати відповідь' : 'Відповісти'}
             </button>
-            {/* Форма відповіді */}
             {replyTo === comment.id && (
               <div className="mt-4">
+                {/* Панель тегів */}
+                <div className="mb-2 flex space-x-2">
+                  <button
+                    onClick={() => addTagToText('strong')}
+                    className="bg-gray-200 px-2 py-1 rounded hover:bg-gray-300"
+                  >
+                    <strong>B</strong>
+                  </button>
+                  <button
+                    onClick={() => addTagToText('i')}
+                    className="bg-gray-200 px-2 py-1 rounded hover:bg-gray-300"
+                  >
+                    <i>I</i>
+                  </button>
+                  <button
+                    onClick={() => addTagToText('code')}
+                    className="bg-gray-200 px-2 py-1 rounded hover:bg-gray-300"
+                  >
+                    Code
+                  </button>
+                  <button
+                    onClick={() => addTagToText('a')}
+                    className="bg-gray-200 px-2 py-1 rounded hover:bg-gray-300"
+                  >
+                    Link
+                  </button>
+                </div>
                 <textarea
+                  ref={textareaRef}
                   placeholder="Напишіть вашу відповідь"
                   className="w-full border border-gray-300 rounded p-2 mb-2"
                   value={replyText}
@@ -120,7 +179,6 @@ const TopicPage = () => {
                 </div>
               </div>
             )}
-            {/* Рекурсивно відображаємо дочірні коментарі */}
             {comment.children && comment.children.length > 0 && renderComments(comment.children)}
           </li>
         ))}

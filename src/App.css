@@ -164,3 +164,12 @@ strong {
 .comment-level-3 {
   margin-left: 48px; /* Відступ для 3-го рівня */
 }
+
+
+code {
+  font-family: monospace;
+  background-color: #f4f4f4;
+  border-radius: 4px;
+  padding: 2px 4px;
+  color: #333;
+}

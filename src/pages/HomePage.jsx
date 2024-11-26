@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify'; // Імпортуємо бібліотеку для очищення HTML
 import api from '../utils/api';
 import CommentModal from '../components/modals/CommentModal';
 import LoginModal from '../components/modals/LoginModal';
@@ -7,6 +8,10 @@ import LoginModal from '../components/modals/LoginModal';
 const HomePage = () => {
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [sortField, setSortField] = useState('date_added');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -18,8 +23,15 @@ const HomePage = () => {
 
     const fetchTopics = async () => {
       try {
-        const response = await api.get('/api/parent-comments/');
+        setLoading(true);
+        const response = await api.get('/api/parent-comments/', {
+          params: {
+            page: currentPage,
+            ordering: `${sortOrder === 'desc' ? '-' : ''}${sortField}`,
+          },
+        });
         setTopics(response.data.results || []);
+        setTotalPages(Math.ceil(response.data.count / 25));
       } catch (error) {
         console.error('Error fetching topics:', error);
       } finally {
@@ -28,7 +40,20 @@ const HomePage = () => {
     };
 
     fetchTopics();
-  }, []);
+  }, [currentPage, sortField, sortOrder]);
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const sanitizeHTML = (html) => {
+    return DOMPurify.sanitize(html, { ALLOWED_TAGS: ['a', 'code', 'i', 'strong'], ALLOWED_ATTR: ['href', 'title'] });
+  };
 
   return (
     <div className="container mx-auto">
@@ -53,25 +78,87 @@ const HomePage = () => {
               Увійти
             </button>
           )}
+          <button
+            onClick={() => setShowCommentModal(true)}
+            className="bg-secondary text-white px-4 py-2 rounded ml-2"
+          >
+            Створити топік
+          </button>
         </div>
       </div>
       {loading ? (
         <p>Завантаження...</p>
       ) : (
-        <ul>
-          {topics.map((topic) => (
-            <li key={topic.id} className="mb-4">
-              <h2 className="text-lg font-bold">{topic.user_name}</h2>
-              <p>{topic.text}</p>
-              <button
-                onClick={() => navigate(`/comments/${topic.id}`)}
-                className="text-blue-500 underline"
-              >
-                Переглянути
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <table className="table-auto w-full border-collapse border border-gray-300">
+            <thead>
+              <tr className="bg-gray-100">
+                <th
+                  onClick={() => handleSort('user_name')}
+                  className="border border-gray-300 px-4 py-2 cursor-pointer"
+                >
+                  Ім'я користувача {sortField === 'user_name' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+                <th
+                  onClick={() => handleSort('email')}
+                  className="border border-gray-300 px-4 py-2 cursor-pointer"
+                >
+                  Email {sortField === 'email' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+                <th
+                  onClick={() => handleSort('date_added')}
+                  className="border border-gray-300 px-4 py-2 cursor-pointer"
+                >
+                  Дата додавання {sortField === 'date_added' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+                <th className="border border-gray-300 px-4 py-2">Текст топіка</th>
+                <th className="border border-gray-300 px-4 py-2">Дії</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topics.map((topic) => (
+                <tr key={topic.id} className="hover:bg-gray-50">
+                  <td className="border border-gray-300 px-4 py-2">{topic.user_name}</td>
+                  <td className="border border-gray-300 px-4 py-2">{topic.email}</td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    {new Date(topic.date_added).toLocaleString()}
+                  </td>
+                  <td
+                    className="border border-gray-300 px-4 py-2"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHTML(topic.text) }}
+                  ></td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    <button
+                      onClick={() => navigate(`/comments/${topic.id}`)}
+                      className="text-blue-500 underline"
+                    >
+                      Переглянути
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex justify-between items-center mt-4">
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="bg-gray-200 px-4 py-2 rounded disabled:opacity-50"
+            >
+              Попередня
+            </button>
+            <p>
+              Сторінка {currentPage} з {totalPages}
+            </p>
+            <button
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="bg-gray-200 px-4 py-2 rounded disabled:opacity-50"
+            >
+              Наступна
+            </button>
+          </div>
+        </>
       )}
       {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
       {showCommentModal && <CommentModal onClose={() => setShowCommentModal(false)} />}
