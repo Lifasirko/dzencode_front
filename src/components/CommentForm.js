@@ -1,45 +1,52 @@
 import React, { useState } from 'react';
-import api from '../utils/api';
+import CommentCard from './CommentCard';
+import CommentForm from './CommentForm';
 
-const CommentForm = ({ parentId = null }) => {
-  const [formData, setFormData] = useState({
-    user_name: '',
-    email: '',
-    text: '',
-    parent_id: parentId,
-  });
+const CommentTree = ({ comments, depth = 0, onCommentAdded }) => {
+  const [replyTo, setReplyTo] = useState(null); // ID коментаря, на який відповідають
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleReplyClick = (commentId) => {
+    setReplyTo((prev) => (prev === commentId ? null : commentId)); // Перемикач форми
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    api.post('/api/comments/', formData) // Використовуємо api.js
-      .then(() => {
-        alert('Comment added!');
-        setFormData({ user_name: '', email: '', text: '', parent_id: parentId });
-      })
-      .catch((error) => console.error('Error adding comment:', error));
-  };
+  if (!comments || comments.length === 0) return null;
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div>
-        <label>User Name:</label>
-        <input name="user_name" value={formData.user_name} onChange={handleChange} required />
-      </div>
-      <div>
-        <label>Email:</label>
-        <input name="email" value={formData.email} onChange={handleChange} required />
-      </div>
-      <div>
-        <label>Text:</label>
-        <textarea name="text" value={formData.text} onChange={handleChange} required />
-      </div>
-      <button type="submit">Submit</button>
-    </form>
+    <ul className="space-y-4">
+      {comments.map((comment) => (
+        <li
+          key={comment.id}
+          style={{ marginLeft: `${depth * 20}px` }} // Відступ залежно від рівня вкладеності
+          className="border-l-2 pl-4"
+        >
+          <CommentCard
+            userName={comment.user_name}
+            text={comment.text}
+            date={comment.date_added || 'Невідома дата'}
+            onReply={() => handleReplyClick(comment.id)} // Відкриття форми відповіді
+          />
+          {/* Форма відповіді */}
+          {replyTo === comment.id && (
+            <CommentForm
+              parentId={comment.id}
+              onCommentAdded={() => {
+                onCommentAdded();
+                setReplyTo(null); // Закрити форму після додавання
+              }}
+            />
+          )}
+          {/* Рекурсивно відображаємо дочірні коментарі */}
+          {comment.children && (
+            <CommentTree
+              comments={comment.children}
+              depth={depth + 1}
+              onCommentAdded={onCommentAdded}
+            />
+          )}
+        </li>
+      ))}
+    </ul>
   );
 };
 
-export default CommentForm;
+export default CommentTree;

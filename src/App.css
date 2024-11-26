@@ -55,13 +55,112 @@ ul {
 }
 
 li {
-  padding: 10px;
+  padding: 15px;
   background-color: #fff;
   margin-bottom: 10px;
   border: 1px solid #ced4da;
-  border-radius: 4px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 strong {
   color: #007bff;
+}
+
+/* Нові стилі для карток */
+.comment-card {
+  padding: 15px;
+  background-color: #ffffff;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.comment-card .header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.comment-card .header img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.comment-card .header .username {
+  font-weight: bold;
+  color: #007bff;
+}
+
+.comment-card .header .timestamp {
+  font-size: 0.85em;
+  color: #6c757d;
+  margin-left: 10px;
+}
+
+.comment-card .content {
+  margin-bottom: 10px;
+}
+
+.comment-card .actions button {
+  background: none;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+.comment-card .actions button:hover {
+  color: #007bff;
+}
+
+/* Відступи для дочірніх коментарів */
+.child-comment {
+  margin-left: 20px;
+  margin-top: 10px;
+}
+
+
+.bg-card {
+  background-color: #fff;
+}
+
+.bg-card-dark {
+  background-color: #2d2d2d;
+}
+
+.text-card-foreground {
+  color: #333;
+}
+
+.text-card-foreground-dark {
+  color: #fff;
+}
+
+.text-muted-foreground {
+  color: #6c757d;
+}
+
+.text-muted-foreground-dark {
+  color: #adb5bd;
+}
+
+.hover\\:text-primary:hover {
+  color: #007bff;
+}
+/* main.css */
+.comment-level-0 {
+  margin-left: 0;
+}
+.comment-level-1 {
+  margin-left: 16px; /* Відступ для 1-го рівня */
+}
+.comment-level-2 {
+  margin-left: 32px; /* Відступ для 2-го рівня */
+}
+.comment-level-3 {
+  margin-left: 48px; /* Відступ для 3-го рівня */
 }
