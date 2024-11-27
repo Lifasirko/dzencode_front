@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DOMPurify from 'dompurify'; // Імпортуємо бібліотеку для очищення HTML
+import DOMPurify from 'dompurify'; // Для очищення HTML
 import api from '../utils/api';
 import CommentModal from '../components/modals/CommentModal';
 import LoginModal from '../components/modals/LoginModal';
@@ -10,7 +10,7 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [sortField, setSortField] = useState('date_added');
+  const [sortField, setSortField] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -106,10 +106,10 @@ const HomePage = () => {
                   Email {sortField === 'email' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
                 <th
-                  onClick={() => handleSort('date_added')}
+                  onClick={() => handleSort('created_at')}
                   className="border border-gray-300 px-4 py-2 cursor-pointer"
                 >
-                  Дата додавання {sortField === 'date_added' && (sortOrder === 'asc' ? '▲' : '▼')}
+                  Дата додавання {sortField === 'created_at' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
                 <th className="border border-gray-300 px-4 py-2">Текст топіка</th>
                 <th className="border border-gray-300 px-4 py-2">Дії</th>
@@ -121,7 +121,7 @@ const HomePage = () => {
                   <td className="border border-gray-300 px-4 py-2">{topic.user_name}</td>
                   <td className="border border-gray-300 px-4 py-2">{topic.email}</td>
                   <td className="border border-gray-300 px-4 py-2">
-                    {new Date(topic.date_added).toLocaleString()}
+                    {new Date(topic.created_at).toLocaleString()} {/* Використовуємо created_at */}
                   </td>
                   <td
                     className="border border-gray-300 px-4 py-2"

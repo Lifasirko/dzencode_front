@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
-import api from '../utils/api';
+import Resizer from 'react-image-file-resizer';
 import placeholderAvatar from '../assets/placeholder-avatar.png';
+import CaptchaComponent from '../components/CaptchaComponent';
+import api from '../utils/api';
 
-// Функція для екранування HTML
 const escapeHTML = (html) => {
   return html
     .replace(/&/g, '&amp;')
@@ -14,7 +15,6 @@ const escapeHTML = (html) => {
     .replace(/'/g, '&#039;');
 };
 
-// Функція для очищення HTML
 const sanitizeHTML = (html) => {
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: ['a', 'code', 'i', 'strong'],
@@ -22,19 +22,36 @@ const sanitizeHTML = (html) => {
   });
 };
 
+const processCodeTags = (html) => {
+  return html.replace(/<code>(.*?)<\/code>/gs, (_, codeContent) => {
+    const escapedCode = escapeHTML(codeContent);
+    return `<code style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 0.5em; border-radius: 4px; line-height: 1.8;">${escapedCode}</code>`;
+  });
+};
+
 const TopicPage = () => {
   const { topicId } = useParams();
+  const navigate = useNavigate();
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [replyTo, setReplyTo] = useState(null);
   const [replyText, setReplyText] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const textareaRef = useRef(null);
+
+  const COMMENTS_PER_PAGE = 25;
 
   useEffect(() => {
     const fetchComments = async () => {
       try {
-        const response = await api.get(`/api/comments/${topicId}/`);
-        setComments(response.data.children || []);
+        const response = await api.get(`/api/comments/${topicId}/`, {
+          params: { page: currentPage },
+        });
+        setComments(response.data.results || []);
+        setTotalPages(Math.ceil(response.data.count / COMMENTS_PER_PAGE));
       } catch (error) {
         console.error('Error fetching comments:', error);
       } finally {
@@ -43,26 +60,79 @@ const TopicPage = () => {
     };
 
     fetchComments();
-  }, [topicId]);
+  }, [topicId, currentPage]);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.type.startsWith('image/')) {
+        Resizer.imageFileResizer(
+          file,
+          320,
+          240,
+          'JPEG',
+          100,
+          0,
+          (uri) => {
+            setSelectedFile({ name: file.name, type: file.type, data: uri });
+          },
+          'base64'
+        );
+      } else if (file.type === 'text/plain') {
+        if (file.size > 102400) {
+          alert('Текстовий файл має бути меншим за 100 КБ');
+        } else {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            setSelectedFile({ name: file.name, type: file.type, data: event.target.result });
+          };
+          reader.readAsText(file);
+        }
+      } else {
+        alert('Підтримуються лише зображення (JPG, PNG, GIF) або текстові файли (TXT)');
+      }
+    }
+  };
 
   const handleReplySubmit = async () => {
+    if (!captchaVerified) {
+      alert('Вам потрібно пройти CAPTCHA.');
+      return;
+    }
+
     if (!replyText.trim()) {
       alert('Текст відповіді не може бути порожнім');
       return;
     }
+
+    const sanitizedText = replyText.replace(
+      /<code>(.*?)<\/code>/g,
+      (_, codeContent) => `<code>${escapeHTML(codeContent)}</code>`
+    );
+
+    const formData = new FormData();
+    formData.append('text', sanitizedText);
+    formData.append('parent', replyTo);
+    formData.append('user_name', localStorage.getItem('user_name') || 'Анонім');
+    formData.append('email', 'your_email@example.com');
+    formData.append('home_page', '');
+
+    if (selectedFile) {
+      formData.append('file', selectedFile.data);
+    }
+
     try {
-      const response = await api.post('/api/comments/', {
-        text: replyText,
-        parent: replyTo,
-        user_name: localStorage.getItem('user_name') || 'Анонім',
-        email: 'your_email@example.com',
-        home_page: '',
+      await api.post('/api/comments/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      console.log('Відповідь успішно додана:', response.data);
       setReplyText('');
       setReplyTo(null);
-      const updatedResponse = await api.get(`/api/comments/${topicId}/`);
-      setComments(updatedResponse.data.children || []);
+      setSelectedFile(null);
+      setCaptchaVerified(false);
+      const updatedResponse = await api.get(`/api/comments/${topicId}/`, {
+        params: { page: currentPage },
+      });
+      setComments(updatedResponse.data.results || []);
     } catch (error) {
       console.error('Помилка додавання відповіді:', error);
       alert('Не вдалося додати відповідь. Спробуйте пізніше.');
@@ -82,7 +152,7 @@ const TopicPage = () => {
     if (tag === 'a') {
       wrappedText = `<a href="" title="">${selectedText || 'посилання'}</a>`;
     } else if (tag === 'code') {
-      wrappedText = `<code>${escapeHTML(selectedText || 'код')}</code>`;
+      wrappedText = `<code>${selectedText || 'код'}</code>`;
     } else {
       wrappedText = `<${tag}>${selectedText}</${tag}>`;
     }
@@ -97,6 +167,10 @@ const TopicPage = () => {
   };
 
   const renderComments = (commentsList) => {
+    if (!commentsList.length) {
+      return <p>Коментарів поки немає.</p>;
+    }
+
     return (
       <ul className="pl-4">
         {commentsList.map((comment) => (
@@ -115,16 +189,13 @@ const TopicPage = () => {
               <div className="flex-1">
                 <h4 className="text-lg font-bold">{sanitizeHTML(comment.user_name)}</h4>
                 <p className="text-sm text-gray-500">
-                  {new Date(comment.date_added).toLocaleString()}
+                  {new Date(comment.created_at).toLocaleString()}
                 </p>
               </div>
             </div>
             <p
               dangerouslySetInnerHTML={{
-                __html: sanitizeHTML(comment.text).replace(
-                  /<code>(.*?)<\/code>/g,
-                  (_, code) => `<code>${escapeHTML(code)}</code>`
-                ),
+                __html: processCodeTags(sanitizeHTML(comment.text)),
               }}
             ></p>
             <button
@@ -135,7 +206,6 @@ const TopicPage = () => {
             </button>
             {replyTo === comment.id && (
               <div className="mt-4">
-                {/* Панель тегів */}
                 <div className="mb-2 flex space-x-2">
                   <button
                     onClick={() => addTagToText('strong')}
@@ -169,17 +239,24 @@ const TopicPage = () => {
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                 ></textarea>
+                <input type="file" onChange={handleFileChange} className="mb-2" />
+                {selectedFile && (
+                  <p>
+                    Завантажено файл: <strong>{selectedFile.name}</strong>
+                  </p>
+                )}
+                <CaptchaComponent onVerify={setCaptchaVerified} />
                 <div className="flex justify-end">
                   <button
                     onClick={handleReplySubmit}
                     className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                    disabled={!captchaVerified}
                   >
                     Додати відповідь
                   </button>
                 </div>
               </div>
             )}
-            {comment.children && comment.children.length > 0 && renderComments(comment.children)}
           </li>
         ))}
       </ul>
@@ -190,11 +267,38 @@ const TopicPage = () => {
     <div className="container mx-auto">
       <div className="flex justify-between items-center my-4">
         <h1 className="text-2xl font-bold">Коментарі до теми</h1>
+        <button
+          onClick={() => navigate('/')}
+          className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300"
+        >
+          Додому
+        </button>
       </div>
       {loading ? (
         <p>Завантаження...</p>
       ) : (
-        <div>{renderComments(comments)}</div>
+        <>
+          {renderComments(comments)}
+          <div className="flex justify-between items-center mt-4">
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="bg-gray-200 px-4 py-2 rounded disabled:opacity-50"
+            >
+              Попередня
+            </button>
+            <p>
+              Сторінка {currentPage} з {totalPages}
+            </p>
+            <button
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="bg-gray-200 px-4 py-2 rounded disabled:opacity-50"
+            >
+              Наступна
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
